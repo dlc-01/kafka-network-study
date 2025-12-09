@@ -5,7 +5,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/codecrafters-io/kafka-starter-go/domain"
+	"github.com/codecrafters-io/kafka-starter-go/domain/request"
+	"github.com/codecrafters-io/kafka-starter-go/domain/response"
 )
 
 func main() {
@@ -24,7 +25,18 @@ func main() {
 	}
 	defer conn.Close()
 
-	message := domain.Message{Size: 0, Header: domain.Header{CorrelationID: 7}}
+	buffer := make([]byte, 128)
+	_, err = conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Error reading buffer: ", err.Error())
+	}
+	msgRequest, err := request.ParseMessage(buffer)
+	if err != nil {
+		fmt.Println("Error request Message: ", err.Error())
+	}
+	headerRequest := msgRequest.Header()
 
-	conn.Write(message.ToBytes())
+	headerResponse := response.ParseRequestHeader(&headerRequest)
+	msg := response.NewMessage(headerResponse)
+	conn.Write(msg.ToBytes())
 }
