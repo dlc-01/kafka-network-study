@@ -30,13 +30,13 @@ func main() {
 	if err != nil {
 		fmt.Println("Error reading buffer: ", err.Error())
 	}
-	msgRequest, err := request.ParseMessage(buffer)
+	msgRequest, err := request.ParseMessageRequest(buffer)
 	if err != nil {
-		fmt.Println("Error request Message: ", err.Error())
+		fmt.Println("Error request MessageRequest: ", err.Error())
 	}
 	headerRequest := msgRequest.Header()
 
 	headerResponse := response.ParseRequestHeader(&headerRequest)
-	msg := response.NewMessage(headerResponse)
+	msg := response.NewMessageResponse(headerResponse)
 	conn.Write(msg.ToBytes())
 }

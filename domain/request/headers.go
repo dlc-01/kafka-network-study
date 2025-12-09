@@ -2,7 +2,7 @@ package request
 
 import "encoding/binary"
 
-type Header struct {
+type HeaderRequest struct {
 	RequestApiKey     uint16
 	RequestApiVersion uint16
 	CorrelationID     uint32
@@ -10,7 +10,7 @@ type Header struct {
 	TagBuffer         []byte
 }
 
-func (h *Header) ToBytes() []byte {
+func (h *HeaderRequest) ToBytes() []byte {
 	res := make([]byte, 0)
 	reqApiKey := make([]byte, 2)
 	binary.BigEndian.PutUint16(reqApiKey, h.RequestApiKey)
@@ -26,8 +26,8 @@ func (h *Header) ToBytes() []byte {
 	return res
 }
 
-func ParseHeader(headerBytes []byte) (*Header, error) {
-	return &Header{
+func ParseHeader(headerBytes []byte) (*HeaderRequest, error) {
+	return &HeaderRequest{
 		RequestApiKey:     binary.BigEndian.Uint16(headerBytes[0:2]),
 		RequestApiVersion: binary.BigEndian.Uint16(headerBytes[2:4]),
 		CorrelationID:     binary.BigEndian.Uint32(headerBytes[4:8]),

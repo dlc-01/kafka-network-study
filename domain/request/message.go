@@ -4,31 +4,31 @@ import (
 	"encoding/binary"
 )
 
-type Message struct {
+type MessageRequest struct {
 	size   uint32
-	header Header
+	header HeaderRequest
 }
 
-func NewMessage(header Header) *Message {
+func NewMessageRequest(header HeaderRequest) *MessageRequest {
 	size := uint32(len(header.ToBytes()))
-	return &Message{size: size, header: header}
+	return &MessageRequest{size: size, header: header}
 }
 
-func (m *Message) Header() Header {
+func (m *MessageRequest) Header() HeaderRequest {
 	return m.header
 }
 
-func (m *Message) ToBytes() []byte {
+func (m *MessageRequest) ToBytes() []byte {
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, m.size)
 	return append(b, m.header.ToBytes()...)
 }
 
-func ParseMessage(data []byte) (*Message, error) {
+func ParseMessageRequest(data []byte) (*MessageRequest, error) {
 	size := binary.BigEndian.Uint32(data[:4])
 	header, err := ParseHeader(data[4:])
 	if err != nil {
 		return nil, err
 	}
-	return &Message{size: size, header: *header}, nil
+	return &MessageRequest{size: size, header: *header}, nil
 }

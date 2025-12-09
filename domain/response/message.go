@@ -2,17 +2,17 @@ package response
 
 import "encoding/binary"
 
-type Message struct {
+type MessageResponse struct {
 	size   uint32
-	header Header
+	header HeaderResponse
 }
 
-func NewMessage(header Header) *Message {
+func NewMessageResponse(header HeaderResponse) *MessageResponse {
 	size := uint32(len(header.ToBytes()))
-	return &Message{size: size, header: header}
+	return &MessageResponse{size: size, header: header}
 }
 
-func (m *Message) ToBytes() []byte {
+func (m *MessageResponse) ToBytes() []byte {
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, m.size)
 	return append(b, m.header.ToBytes()...)
