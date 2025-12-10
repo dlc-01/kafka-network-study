@@ -22,10 +22,7 @@ func (p *RequestProcessor) Process(req *domain.MessageRequest) (*domain.MessageR
 		CorrelationID: req.Header.CorrelationID,
 		ErrorCode:     errCode,
 		ApiKeys: []domain.ApiKey{
-			{ApiKey: 18, MinVersion: 0, MaxVersion: 4},
-		},
-		DescribeTopicPartitions: domain.DescribeTopicPartitions{
-			ApiKey: 75,
+			{ApiKey: 18, MinVersion: 0, MaxVersion: 4}, domain.GetDescribeTopicPartitionsApikey(75),
 		},
 		ThrottleTime: 0,
 	}, nil
