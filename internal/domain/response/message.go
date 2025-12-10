@@ -4,6 +4,7 @@ import "github.com/codecrafters-io/kafka-starter-go/internal/domain"
 
 type MessageResponse struct {
 	CorrelationID uint32
+	HeaderVersion uint16
 	Body          ResponseBody
 }
 

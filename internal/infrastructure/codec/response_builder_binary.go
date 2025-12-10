@@ -110,7 +110,46 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 			outBody = append(outBody, 0)
 		}
 
-		outBody = append(outBody, 1)
+		// COMPACT_ARRAY partitions
+		outBody = append(outBody, byte(len(t.Partitions)+1))
+
+		for _, p := range t.Partitions {
+			tmp2 := make([]byte, 2)
+			binary.BigEndian.PutUint16(tmp2, p.ErrorCode)
+			outBody = append(outBody, tmp2...)
+
+			tmp4 := make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp4, uint32(p.PartitionIndex))
+			outBody = append(outBody, tmp4...)
+
+			binary.BigEndian.PutUint32(tmp4, uint32(p.LeaderID))
+			outBody = append(outBody, tmp4...)
+
+			binary.BigEndian.PutUint32(tmp4, uint32(p.LeaderEpoch))
+			outBody = append(outBody, tmp4...)
+
+			outBody = append(outBody, byte(len(p.Replicas)+1))
+			for _, r := range p.Replicas {
+				b := make([]byte, 4)
+				binary.BigEndian.PutUint32(b, uint32(r))
+				outBody = append(outBody, b...)
+			}
+
+			outBody = append(outBody, byte(len(p.ISR)+1))
+			for _, r := range p.ISR {
+				b := make([]byte, 4)
+				binary.BigEndian.PutUint32(b, uint32(r))
+				outBody = append(outBody, b...)
+			}
+
+			outBody = append(outBody, 1)
+
+			outBody = append(outBody, 1)
+
+			outBody = append(outBody, 1)
+
+			outBody = append(outBody, 0)
+		}
 
 		authBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(authBytes, t.AuthorizedOp)
@@ -120,7 +159,7 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 	}
 
 	outBody = append(outBody, 0xff)
-	
+
 	outBody = append(outBody, 0)
 
 	payload := append(header, outBody...)

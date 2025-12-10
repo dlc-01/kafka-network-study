@@ -1,18 +1,26 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/codec"
 	netinfra "github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/net"
+	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/repository"
 	"github.com/codecrafters-io/kafka-starter-go/internal/ports"
 	"github.com/codecrafters-io/kafka-starter-go/internal/usecase"
 )
 
 func main() {
+
+	repo := repository.NewKraftMetadataRepository(
+		"/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log",
+	)
+
 	parser := codec.NewBinaryRequestParser()
 	builder := codec.NewBinaryResponseBuilder()
-	processor := usecase.NewRequestProcessor()
+	processor := usecase.NewRequestProcessor(repo)
 
 	server := netinfra.NewTCPServer("0.0.0.0:9092")
 
@@ -26,6 +34,9 @@ func main() {
 		for {
 			n, err := conn.Read(buf)
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return
+				}
 				fmt.Println(err)
 				return
 			}
