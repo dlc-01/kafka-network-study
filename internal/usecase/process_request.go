@@ -24,6 +24,9 @@ func (p *RequestProcessor) Process(req *domain.MessageRequest) (*domain.MessageR
 		ApiKeys: []domain.ApiKey{
 			{ApiKey: 18, MinVersion: 0, MaxVersion: 4},
 		},
+		DescribeTopicPartitions: domain.DescribeTopicPartitions{
+			ApiKey: 75,
+		},
 		ThrottleTime: 0,
 	}, nil
 }

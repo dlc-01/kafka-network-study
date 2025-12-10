@@ -24,7 +24,7 @@ func (b *BinaryResponseBuilder) Build(resp *domain.MessageResponse) ([]byte, err
 	binary.BigEndian.PutUint16(errCode, resp.ErrorCode)
 	body = append(body, errCode...)
 
-	body = append(body, byte(len(resp.ApiKeys)+1))
+	body = append(body, byte(len(resp.ApiKeys)+2))
 
 	for _, k := range resp.ApiKeys {
 		api := make([]byte, 2)
@@ -37,8 +37,18 @@ func (b *BinaryResponseBuilder) Build(resp *domain.MessageResponse) ([]byte, err
 		binary.BigEndian.PutUint16(max, k.MaxVersion)
 		body = append(body, max...)
 		body = append(body, 0)
-
 	}
+
+	api := make([]byte, 2)
+	binary.BigEndian.PutUint16(api, resp.DescribeTopicPartitions.ApiKey)
+	body = append(body, api...)
+	min := make([]byte, 2)
+	binary.BigEndian.PutUint16(min, resp.DescribeTopicPartitions.MinVersion)
+	body = append(body, min...)
+	max := make([]byte, 2)
+	binary.BigEndian.PutUint16(max, resp.DescribeTopicPartitions.MaxVersion)
+	body = append(body, max...)
+	body = append(body, 0)
 
 	throttle := make([]byte, 4)
 	binary.BigEndian.PutUint32(throttle, resp.ThrottleTime)
