@@ -1,9 +1,4 @@
-package domain
-
-type MessageRequest struct {
-	Size   uint32
-	Header RequestHeader
-}
+package request
 
 type RequestHeader struct {
 	ApiKey        uint16

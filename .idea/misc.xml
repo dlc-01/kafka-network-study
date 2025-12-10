@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="GOROOT" url="file://$USER_HOME$/sdk/go1.20.4" />
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>

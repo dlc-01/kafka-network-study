@@ -1,7 +1,9 @@
 package ports
 
-import "github.com/codecrafters-io/kafka-starter-go/internal/domain"
+import (
+	"github.com/codecrafters-io/kafka-starter-go/internal/domain/response"
+)
 
 type ResponseBuilder interface {
-	Build(resp *domain.MessageResponse) ([]byte, error)
+	Build(resp *response.MessageResponse) ([]byte, error)
 }
