@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/codecrafters-io/kafka-starter-go/domain"
 	"github.com/codecrafters-io/kafka-starter-go/domain/request"
 	"github.com/codecrafters-io/kafka-starter-go/domain/response"
 )
@@ -37,6 +38,6 @@ func main() {
 	headerRequest := msgRequest.Header()
 
 	headerResponse := response.ParseRequestHeader(&headerRequest)
-	msg := response.NewMessageResponse(headerResponse)
+	msg := response.NewMessageResponse(headerResponse, []domain.ApiKey{domain.NewApiKey(18, 0, 4, []byte{})}, 0)
 	conn.Write(msg.ToBytes())
 }
