@@ -2,42 +2,49 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"os"
 
-	"github.com/codecrafters-io/kafka-starter-go/domain"
-	"github.com/codecrafters-io/kafka-starter-go/domain/request"
-	"github.com/codecrafters-io/kafka-starter-go/domain/response"
+	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/codec"
+	netinfra "github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/net"
+	"github.com/codecrafters-io/kafka-starter-go/internal/ports"
+	"github.com/codecrafters-io/kafka-starter-go/internal/usecase"
 )
 
 func main() {
-	fmt.Println("Logs from your program will appear here!")
+	parser := codec.NewBinaryRequestParser()
+	builder := codec.NewBinaryResponseBuilder()
+	processor := usecase.NewRequestProcessor()
 
-	l, err := net.Listen("tcp", "0.0.0.0:9092")
-	if err != nil {
-		fmt.Println("Failed to bind to port 9092")
-		os.Exit(1)
-	}
+	server := netinfra.NewTCPServer("0.0.0.0:9092")
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close()
+	fmt.Println("Kafka minimal server started")
 
-	buffer := make([]byte, 128)
-	_, err = conn.Read(buffer)
-	if err != nil {
-		fmt.Println("Error reading buffer: ", err.Error())
-	}
-	msgRequest, err := request.ParseMessageRequest(buffer)
-	if err != nil {
-		fmt.Println("Error request MessageRequest: ", err.Error())
-	}
-	headerRequest := msgRequest.Header()
+	server.Start(func(conn ports.Connection) {
+		defer conn.Close()
 
-	headerResponse := response.ParseRequestHeader(&headerRequest)
-	msg := response.NewMessageResponse(headerResponse, []domain.ApiKey{domain.NewApiKey(18, 0, 4, []byte{})}, 0)
-	conn.Write(msg.ToBytes())
+		buf := make([]byte, 1024)
+
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			req, err := parser.Parse(buf[:n])
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			resp, _ := processor.Process(req)
+			msg, _ := builder.Build(resp)
+
+			_, err = conn.Write(msg)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+		}
+	})
+
 }
