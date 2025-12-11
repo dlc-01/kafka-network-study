@@ -23,6 +23,8 @@ func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.Messa
 		return p.processApiVersions(req.Header), nil
 	case *request.DescribeTopicPartitionsRequest:
 		return p.processDescribeTopicPartitions(req.Header, body), nil
+	case *request.FetchRequest:
+		return p.processFetch(req.Header, body), nil
 	default:
 		return p.processApiVersions(req.Header), nil
 	}
@@ -31,7 +33,7 @@ func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.Messa
 func (p *RequestProcessor) processApiVersions(h request.RequestHeader) *response.MessageResponse {
 	var errCode uint16
 
-	if h.ApiVersion > domain.MaximumVersion {
+	if h.ApiVersion > domain.MaximumVersionApiKey {
 		errCode = domain.ErrorNotSupportedApiVersion
 	}
 
@@ -100,6 +102,25 @@ func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeade
 		ThrottleTime: 0,
 		Topics:       topics,
 		NextCursor:   -1,
+	}
+
+	return &response.MessageResponse{
+		CorrelationID: h.CorrelationID,
+		HeaderVersion: 1,
+		Body:          body,
+	}
+}
+
+func (p *RequestProcessor) processFetch(
+	h request.RequestHeader,
+	_ *request.FetchRequest,
+) *response.MessageResponse {
+
+	body := &response.FetchResponseBody{
+		ThrottleTimeMs: 0,
+		ErrorCode:      0,
+		SessionID:      0,
+		Responses:      []response.FetchTopicResponse{},
 	}
 
 	return &response.MessageResponse{

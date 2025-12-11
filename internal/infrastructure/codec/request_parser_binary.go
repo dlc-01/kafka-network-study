@@ -42,7 +42,9 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 		if err != nil {
 			return nil, err
 		}
-
+	case domain.FetchApikey:
+		body = &request.FetchRequest{}
+		
 	default:
 		body = &request.ApiVersionsRequest{}
 	}
@@ -112,7 +114,7 @@ func parseDescribeTopicPartitionsRequest(payload []byte) (*request.DescribeTopic
 	if len(payload) >= offset+4 {
 		offset += 4
 	}
-	
+
 	var cursor int8 = -1
 	if len(payload) >= offset+1 {
 		cursor = int8(payload[offset])

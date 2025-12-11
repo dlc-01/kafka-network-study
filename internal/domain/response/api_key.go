@@ -12,7 +12,7 @@ func GetApiVersions() ApiKeyResponse {
 	return ApiKeyResponse{
 		ApiKey:     domain.ApiVersionApikey,
 		MinVersion: domain.NONE,
-		MaxVersion: domain.MaximumVersion,
+		MaxVersion: domain.MaximumVersionApiKey,
 	}
 }
 
@@ -26,8 +26,8 @@ func GetDescribeTopicPartitionsApikey() ApiKeyResponse {
 
 func GetFetchApiKey() ApiKeyResponse {
 	return ApiKeyResponse{
-		ApiKey:     1,
-		MinVersion: 0,
-		MaxVersion: 16,
+		ApiKey:     domain.FetchApikey,
+		MinVersion: domain.NONE,
+		MaxVersion: domain.MaximumVersionFetchApiKey,
 	}
 }

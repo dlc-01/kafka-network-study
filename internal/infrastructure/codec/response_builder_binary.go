@@ -24,6 +24,8 @@ func (b *BinaryResponseBuilder) Build(resp *response.MessageResponse) ([]byte, e
 		return b.buildApiVersions(resp.CorrelationID, body)
 	case *response.DescribeTopicPartitionsResponseBody:
 		return b.buildDescribeTopicPartitions(resp.CorrelationID, body)
+	case *response.FetchResponseBody:
+		return b.buildFetch(resp.CorrelationID, body)
 	default:
 		return nil, errors.New("unsupported response body type")
 	}
@@ -161,6 +163,46 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 	outBody = append(outBody, 0)
 
 	payload := append(header, outBody...)
+	size := uint32(len(payload))
+
+	sizeBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(sizeBytes, size)
+
+	return append(sizeBytes, payload...), nil
+}
+
+func (b *BinaryResponseBuilder) buildFetch(
+	correlationID uint32,
+	body *response.FetchResponseBody,
+) ([]byte, error) {
+	
+	header := make([]byte, 0)
+
+	corrBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(corrBytes, correlationID)
+	header = append(header, corrBytes...)
+
+	header = append(header, 0)
+
+	out := make([]byte, 0)
+
+	tmp4 := make([]byte, 4)
+
+	binary.BigEndian.PutUint32(tmp4, uint32(body.ThrottleTimeMs))
+	out = append(out, tmp4...)
+
+	tmp2 := make([]byte, 2)
+	binary.BigEndian.PutUint16(tmp2, uint16(body.ErrorCode))
+	out = append(out, tmp2...)
+
+	binary.BigEndian.PutUint32(tmp4, uint32(body.SessionID))
+	out = append(out, tmp4...)
+
+	out = append(out, byte(len(body.Responses)+1))
+
+	out = append(out, 0)
+
+	payload := append(header, out...)
 	size := uint32(len(payload))
 
 	sizeBytes := make([]byte, 4)
