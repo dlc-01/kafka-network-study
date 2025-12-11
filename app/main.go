@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/codecrafters-io/kafka-starter-go/internal/domain"
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/codec"
 	netinfra "github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/net"
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/repository"
@@ -18,7 +19,11 @@ func main() {
 	metadataLoader := repository.NewMetadataLoader(diskManager)
 	metadata, err := metadataLoader.Load()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("metadata load failed, starting with empty metadata:", err)
+		metadata = &repository.LoadedMetadata{
+			ByName: map[string]*domain.TopicMetadata{},
+			ByUUID: map[[16]byte]*domain.TopicMetadata{},
+		}
 	}
 	repo := repository.NewKraftMetadataRepository(metadata)
 
