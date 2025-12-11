@@ -14,7 +14,7 @@ func (r *FetchResponseBody) ApiKey() uint16 {
 }
 
 type FetchTopicResponse struct {
-	Topic      string
+	TopicID    [16]byte
 	Partitions []FetchPartitionResponse
 }
 

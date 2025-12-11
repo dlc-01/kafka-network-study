@@ -43,8 +43,11 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 			return nil, err
 		}
 	case domain.FetchApikey:
-		body = &request.FetchRequest{}
-		
+		body, err = parseFetchRequest(payload)
+		if err != nil {
+			return nil, err
+		}
+
 	default:
 		body = &request.ApiVersionsRequest{}
 	}
@@ -125,4 +128,95 @@ func parseDescribeTopicPartitionsRequest(payload []byte) (*request.DescribeTopic
 		Topics: topics,
 		Cursor: cursor,
 	}, nil
+}
+func readUvarint(b []byte) (uint64, int, error) {
+	v, n := binary.Uvarint(b)
+	if n == 0 {
+		return 0, 0, errors.New("uvarint: buffer too small")
+	}
+	if n < 0 {
+		return 0, 0, errors.New("uvarint: overflow")
+	}
+	return v, n, nil
+}
+
+func parseFetchRequest(payload []byte) (*request.FetchRequest, error) {
+	r := &request.FetchRequest{}
+	offset := 0
+
+	if len(payload) < offset+2 {
+		return nil, errors.New("fetch: too short for client_id length")
+	}
+	clientLen := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+	offset += 2
+
+	if len(payload) < offset+clientLen {
+		return nil, errors.New("fetch: too short for client_id bytes")
+	}
+	offset += clientLen
+
+	if len(payload) < offset+1 {
+		return nil, errors.New("fetch: too short for header tag buffer")
+	}
+	offset++
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("fetch: too short for max_wait_ms")
+	}
+	offset += 4
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("fetch: too short for min_bytes")
+	}
+	offset += 4
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("fetch: too short for max_bytes")
+	}
+	offset += 4
+
+	if len(payload) < offset+1 {
+		return nil, errors.New("fetch: too short for isolation_level")
+	}
+	offset++
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("fetch: too short for session_id")
+	}
+	offset += 4
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("fetch: too short for session_epoch")
+	}
+	offset += 4
+
+	if len(payload) <= offset {
+		return nil, errors.New("fetch: too short for topics compact length")
+	}
+	topicsLen, n, err := readUvarint(payload[offset:])
+	if err != nil {
+		return nil, err
+	}
+	offset += n
+
+	topicsCount := int(topicsLen) - 1
+	if topicsCount < 0 {
+		return nil, errors.New("fetch: invalid topics count")
+	}
+	if topicsCount == 0 {
+		return r, nil
+	}
+
+	if len(payload) < offset+16 {
+		return nil, errors.New("fetch: truncated topic_id")
+	}
+	var id [16]byte
+	copy(id[:], payload[offset:offset+16])
+	offset += 16
+
+	r.Topics = append(r.Topics, request.FetchTopic{
+		TopicID: id,
+	})
+
+	return r, nil
 }

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/codecrafters-io/kafka-starter-go/internal/domain"
@@ -18,6 +19,7 @@ func NewRequestProcessor(metadataRepo ports.MetadataRepository) *RequestProcesso
 }
 
 func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.MessageResponse, error) {
+	fmt.Println(req)
 	switch body := req.Body.(type) {
 	case *request.ApiVersionsRequest:
 		return p.processApiVersions(req.Header), nil
@@ -113,14 +115,33 @@ func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeade
 
 func (p *RequestProcessor) processFetch(
 	h request.RequestHeader,
-	_ *request.FetchRequest,
+	r *request.FetchRequest,
 ) *response.MessageResponse {
+	responses := make([]response.FetchTopicResponse, 0, len(r.Topics))
+
+	for _, t := range r.Topics {
+		partition := response.FetchPartitionResponse{
+			PartitionIndex:   0,
+			ErrorCode:        domain.ErrorUnknownTopicId,
+			HighWatermark:    0,
+			LastStableOffset: 0,
+			LogStartOffset:   0,
+			Records:          nil,
+		}
+
+		topicResp := response.FetchTopicResponse{
+			TopicID:    t.TopicID,
+			Partitions: []response.FetchPartitionResponse{partition},
+		}
+
+		responses = append(responses, topicResp)
+	}
 
 	body := &response.FetchResponseBody{
 		ThrottleTimeMs: 0,
 		ErrorCode:      0,
 		SessionID:      0,
-		Responses:      []response.FetchTopicResponse{},
+		Responses:      responses,
 	}
 
 	return &response.MessageResponse{

@@ -175,19 +175,18 @@ func (b *BinaryResponseBuilder) buildFetch(
 	correlationID uint32,
 	body *response.FetchResponseBody,
 ) ([]byte, error) {
-	
+
 	header := make([]byte, 0)
 
-	corrBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(corrBytes, correlationID)
-	header = append(header, corrBytes...)
+	corr := make([]byte, 4)
+	binary.BigEndian.PutUint32(corr, correlationID)
+	header = append(header, corr...)
 
 	header = append(header, 0)
 
 	out := make([]byte, 0)
 
 	tmp4 := make([]byte, 4)
-
 	binary.BigEndian.PutUint32(tmp4, uint32(body.ThrottleTimeMs))
 	out = append(out, tmp4...)
 
@@ -200,11 +199,48 @@ func (b *BinaryResponseBuilder) buildFetch(
 
 	out = append(out, byte(len(body.Responses)+1))
 
+	for _, resp := range body.Responses {
+
+		out = append(out, resp.TopicID[:]...)
+
+		out = append(out, byte(len(resp.Partitions)+1))
+
+		for _, p := range resp.Partitions {
+			binary.BigEndian.PutUint32(tmp4, uint32(p.PartitionIndex))
+			out = append(out, tmp4...)
+
+			binary.BigEndian.PutUint16(tmp2, uint16(p.ErrorCode))
+			out = append(out, tmp2...)
+
+			tmp8 := make([]byte, 8)
+			binary.BigEndian.PutUint64(tmp8, uint64(p.HighWatermark))
+			out = append(out, tmp8...)
+
+			binary.BigEndian.PutUint64(tmp8, uint64(p.LastStableOffset))
+			out = append(out, tmp8...)
+
+			binary.BigEndian.PutUint64(tmp8, uint64(p.LogStartOffset))
+			out = append(out, tmp8...)
+
+			out = append(out, 1)
+
+			tmp4 = make([]byte, 4)
+			binary.BigEndian.PutUint32(tmp4, 0xffffffff)
+			out = append(out, tmp4...)
+
+			out = append(out, 1)
+
+			out = append(out, 0)
+		}
+
+		out = append(out, 0)
+	}
+
 	out = append(out, 0)
 
 	payload := append(header, out...)
-	size := uint32(len(payload))
 
+	size := uint32(len(payload))
 	sizeBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sizeBytes, size)
 

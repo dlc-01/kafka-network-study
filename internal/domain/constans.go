@@ -10,3 +10,4 @@ const MaximumVersionFetchApiKey = 16
 
 const ErrorNotSupportedApiVersion = 35
 const ErrorUnknownTopicOrPartition = 3
+const ErrorUnknownTopicId = 100
