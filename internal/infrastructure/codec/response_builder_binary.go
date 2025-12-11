@@ -109,7 +109,6 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 			outBody = append(outBody, 0)
 		}
 
-		// COMPACT_ARRAY partitions
 		outBody = append(outBody, byte(len(t.Partitions)+1))
 
 		for _, p := range t.Partitions {

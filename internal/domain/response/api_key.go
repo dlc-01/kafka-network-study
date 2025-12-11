@@ -23,3 +23,11 @@ func GetDescribeTopicPartitionsApikey() ApiKeyResponse {
 		MaxVersion: domain.NONE,
 	}
 }
+
+func GetFetchApiKey() ApiKeyResponse {
+	return ApiKeyResponse{
+		ApiKey:     1,
+		MinVersion: 0,
+		MaxVersion: 16,
+	}
+}

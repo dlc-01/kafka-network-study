@@ -36,8 +36,11 @@ func (p *RequestProcessor) processApiVersions(h request.RequestHeader) *response
 	}
 
 	body := &response.ApiVersionsResponseBody{
-		ErrorCode:    errCode,
-		ApiKeys:      []response.ApiKeyResponse{response.GetApiVersions(), response.GetDescribeTopicPartitionsApikey()},
+		ErrorCode: errCode,
+		ApiKeys: []response.ApiKeyResponse{
+			response.GetApiVersions(),
+			response.GetDescribeTopicPartitionsApikey(),
+			response.GetFetchApiKey()},
 		ThrottleTime: 0,
 	}
 
