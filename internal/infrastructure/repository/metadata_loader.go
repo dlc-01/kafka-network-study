@@ -6,6 +6,11 @@ import (
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/storage"
 )
 
+type LoadedMetadata struct {
+	ByName map[string]*domain.TopicMetadata
+	ByUUID map[[16]byte]*domain.TopicMetadata
+}
+
 type MetadataLoader struct {
 	dm *storage.DiskManager
 }
@@ -14,7 +19,7 @@ func NewMetadataLoader(dm *storage.DiskManager) *MetadataLoader {
 	return &MetadataLoader{dm: dm}
 }
 
-func (l *MetadataLoader) Load() (map[string]*domain.TopicMetadata, error) {
+func (l *MetadataLoader) Load() (*LoadedMetadata, error) {
 	data, err := l.dm.LoadBytes()
 	if err != nil {
 		return nil, err
@@ -28,7 +33,7 @@ func (l *MetadataLoader) Load() (map[string]*domain.TopicMetadata, error) {
 	return buildDomainTopics(batches), nil
 }
 
-func buildDomainTopics(batches []parser.RecordBatch) map[string]*domain.TopicMetadata {
+func buildDomainTopics(batches []parser.RecordBatch) *LoadedMetadata {
 	result := make(map[string]*domain.TopicMetadata)
 
 	byUUID := make(map[[16]byte]*domain.TopicMetadata)
@@ -70,5 +75,8 @@ func buildDomainTopics(batches []parser.RecordBatch) map[string]*domain.TopicMet
 		}
 	}
 
-	return result
+	return &LoadedMetadata{
+		ByName: result,
+		ByUUID: byUUID,
+	}
 }

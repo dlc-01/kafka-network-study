@@ -120,6 +120,8 @@ func (p *RequestProcessor) processFetch(
 	responses := make([]response.FetchTopicResponse, 0, len(r.Topics))
 
 	for _, t := range r.Topics {
+		meta, _ := p.metadataRepo.GetTopicByID(t.TopicID)
+
 		partition := response.FetchPartitionResponse{
 			PartitionIndex:   0,
 			ErrorCode:        domain.ErrorUnknownTopicId,
@@ -127,6 +129,10 @@ func (p *RequestProcessor) processFetch(
 			LastStableOffset: 0,
 			LogStartOffset:   0,
 			Records:          nil,
+		}
+
+		if meta != nil {
+			partition.ErrorCode = 0
 		}
 
 		topicResp := response.FetchTopicResponse{
