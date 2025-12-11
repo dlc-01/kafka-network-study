@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"sort"
+
 	"github.com/codecrafters-io/kafka-starter-go/internal/domain"
 	"github.com/codecrafters-io/kafka-starter-go/internal/domain/request"
 	"github.com/codecrafters-io/kafka-starter-go/internal/domain/response"
@@ -86,6 +88,10 @@ func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeade
 
 		topics = append(topics, td)
 	}
+
+	sort.Slice(topics, func(i, j int) bool {
+		return topics[i].Name < topics[j].Name
+	})
 
 	body := &response.DescribeTopicPartitionsResponseBody{
 		ThrottleTime: 0,
