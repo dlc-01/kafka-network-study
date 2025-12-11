@@ -31,3 +31,11 @@ func GetFetchApiKey() ApiKeyResponse {
 		MaxVersion: domain.MaximumVersionFetchApiKey,
 	}
 }
+
+func GetProduceApiKey() ApiKeyResponse {
+	return ApiKeyResponse{
+		ApiKey:     domain.ProduceApiKey,
+		MinVersion: domain.NONE,
+		MaxVersion: domain.MaximumVersionProduceApiKey,
+	}
+}

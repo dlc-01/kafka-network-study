@@ -47,6 +47,8 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 		if err != nil {
 			return nil, err
 		}
+	case domain.ProduceApiKey:
+		body = &request.ProduceRequest{}
 
 	default:
 		body = &request.ApiVersionsRequest{}

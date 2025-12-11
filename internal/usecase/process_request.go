@@ -45,7 +45,8 @@ func (p *RequestProcessor) processApiVersions(h request.RequestHeader) *response
 		ApiKeys: []response.ApiKeyResponse{
 			response.GetApiVersions(),
 			response.GetDescribeTopicPartitionsApikey(),
-			response.GetFetchApiKey()},
+			response.GetFetchApiKey(),
+			response.GetProduceApiKey()},
 		ThrottleTime: 0,
 	}
 
