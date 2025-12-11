@@ -8,15 +8,19 @@ import (
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/codec"
 	netinfra "github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/net"
 	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/repository"
+	"github.com/codecrafters-io/kafka-starter-go/internal/infrastructure/storage"
 	"github.com/codecrafters-io/kafka-starter-go/internal/ports"
 	"github.com/codecrafters-io/kafka-starter-go/internal/usecase"
 )
 
 func main() {
-
-	repo := repository.NewKraftMetadataRepository(
-		"/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log",
-	)
+	diskManager := storage.NewDiskManager("/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log")
+	metadataLoader := repository.NewMetadataLoader(diskManager)
+	metadata, err := metadataLoader.Load()
+	if err != nil {
+		fmt.Println(err)
+	}
+	repo := repository.NewKraftMetadataRepository(metadata)
 
 	parser := codec.NewBinaryRequestParser()
 	builder := codec.NewBinaryResponseBuilder()

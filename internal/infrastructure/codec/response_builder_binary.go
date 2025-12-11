@@ -101,7 +101,6 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 		nameLen := len(t.Name)
 		outBody = append(outBody, byte(nameLen+1))
 		outBody = append(outBody, []byte(t.Name)...)
-
 		outBody = append(outBody, t.TopicID[:]...)
 
 		if t.IsInternal {
