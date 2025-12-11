@@ -27,9 +27,11 @@ func main() {
 	}
 	repo := repository.NewKraftMetadataRepository(metadata)
 
+	logManager := storage.NewLogManager("/tmp/kraft-combined-logs")
+
 	parser := codec.NewBinaryRequestParser()
 	builder := codec.NewBinaryResponseBuilder()
-	processor := usecase.NewRequestProcessor(repo)
+	processor := usecase.NewRequestProcessor(repo, logManager)
 
 	server := netinfra.NewTCPServer("0.0.0.0:9092")
 

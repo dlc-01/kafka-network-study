@@ -35,140 +35,89 @@ func (b *BinaryResponseBuilder) buildApiVersions(
 	correlationID uint32,
 	body *response.ApiVersionsResponseBody,
 ) ([]byte, error) {
-	header := make([]byte, 4)
-	binary.BigEndian.PutUint32(header, correlationID)
 
-	outBody := make([]byte, 0)
+	header := make([]byte, 0)
+	header = appendUint32(header, correlationID)
 
-	errBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(errBytes, body.ErrorCode)
-	outBody = append(outBody, errBytes...)
+	out := make([]byte, 0)
+	out = appendUint16(out, body.ErrorCode)
 
-	outBody = append(outBody, byte(len(body.ApiKeys)+1))
+	out = append(out, byte(len(body.ApiKeys)+1))
 
-	tmp := make([]byte, 2)
 	for _, k := range body.ApiKeys {
-		binary.BigEndian.PutUint16(tmp, k.ApiKey)
-		outBody = append(outBody, tmp...)
-
-		binary.BigEndian.PutUint16(tmp, k.MinVersion)
-		outBody = append(outBody, tmp...)
-
-		binary.BigEndian.PutUint16(tmp, k.MaxVersion)
-		outBody = append(outBody, tmp...)
-
-		outBody = append(outBody, 0)
+		out = appendUint16(out, k.ApiKey)
+		out = appendUint16(out, k.MinVersion)
+		out = appendUint16(out, k.MaxVersion)
+		out = append(out, 0)
 	}
 
-	throttle := make([]byte, 4)
-	binary.BigEndian.PutUint32(throttle, body.ThrottleTime)
-	outBody = append(outBody, throttle...)
+	out = appendUint32(out, body.ThrottleTime)
+	out = append(out, 0)
 
-	outBody = append(outBody, 0)
-
-	payload := append(header, outBody...)
-	size := uint32(len(payload))
-
-	sizeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizeBytes, size)
-
-	return append(sizeBytes, payload...), nil
+	payload := append(header, out...)
+	return wrapWithSize(payload), nil
 }
 
 func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 	correlationID uint32,
 	body *response.DescribeTopicPartitionsResponseBody,
 ) ([]byte, error) {
-	header := make([]byte, 0, 5)
 
-	corrBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(corrBytes, correlationID)
-	header = append(header, corrBytes...)
+	header := make([]byte, 0)
+	header = appendUint32(header, correlationID)
+	header = append(header, 0) // header tagged fields
 
-	header = append(header, 0)
+	out := make([]byte, 0)
 
-	outBody := make([]byte, 0)
-
-	throttle := make([]byte, 4)
-	binary.BigEndian.PutUint32(throttle, body.ThrottleTime)
-	outBody = append(outBody, throttle...)
-
-	outBody = append(outBody, byte(len(body.Topics)+1))
+	out = appendUint32(out, body.ThrottleTime)
+	out = append(out, byte(len(body.Topics)+1))
 
 	for _, t := range body.Topics {
-		errBytes := make([]byte, 2)
-		binary.BigEndian.PutUint16(errBytes, t.ErrorCode)
-		outBody = append(outBody, errBytes...)
+		out = appendUint16(out, t.ErrorCode)
 
-		nameLen := len(t.Name)
-		outBody = append(outBody, byte(nameLen+1))
-		outBody = append(outBody, []byte(t.Name)...)
-		outBody = append(outBody, t.TopicID[:]...)
+		out = append(out, byte(len(t.Name)+1))
+		out = append(out, t.Name...)
+		out = append(out, t.TopicID[:]...)
 
 		if t.IsInternal {
-			outBody = append(outBody, 1)
+			out = append(out, 1)
 		} else {
-			outBody = append(outBody, 0)
+			out = append(out, 0)
 		}
 
-		outBody = append(outBody, byte(len(t.Partitions)+1))
+		out = append(out, byte(len(t.Partitions)+1))
 
 		for _, p := range t.Partitions {
-			tmp2 := make([]byte, 2)
-			binary.BigEndian.PutUint16(tmp2, p.ErrorCode)
-			outBody = append(outBody, tmp2...)
+			out = appendUint16(out, p.ErrorCode)
+			out = appendInt32(out, p.PartitionIndex)
+			out = appendInt32(out, p.LeaderID)
+			out = appendInt32(out, p.LeaderEpoch)
 
-			tmp4 := make([]byte, 4)
-			binary.BigEndian.PutUint32(tmp4, uint32(p.PartitionIndex))
-			outBody = append(outBody, tmp4...)
-
-			binary.BigEndian.PutUint32(tmp4, uint32(p.LeaderID))
-			outBody = append(outBody, tmp4...)
-
-			binary.BigEndian.PutUint32(tmp4, uint32(p.LeaderEpoch))
-			outBody = append(outBody, tmp4...)
-
-			outBody = append(outBody, byte(len(p.Replicas)+1))
+			out = append(out, byte(len(p.Replicas)+1))
 			for _, r := range p.Replicas {
-				b := make([]byte, 4)
-				binary.BigEndian.PutUint32(b, uint32(r))
-				outBody = append(outBody, b...)
+				out = appendInt32(out, r)
 			}
 
-			outBody = append(outBody, byte(len(p.ISR)+1))
+			out = append(out, byte(len(p.ISR)+1))
 			for _, r := range p.ISR {
-				b := make([]byte, 4)
-				binary.BigEndian.PutUint32(b, uint32(r))
-				outBody = append(outBody, b...)
+				out = appendInt32(out, r)
 			}
 
-			outBody = append(outBody, 1)
-
-			outBody = append(outBody, 1)
-
-			outBody = append(outBody, 1)
-
-			outBody = append(outBody, 0)
+			out = append(out, 1)
+			out = append(out, 1)
+			out = append(out, 1)
+			out = append(out, 0)
 		}
 
-		authBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(authBytes, t.AuthorizedOp)
-		outBody = append(outBody, authBytes...)
-
-		outBody = append(outBody, 0)
+		out = appendUint32(out, t.AuthorizedOp)
+		out = append(out, 0)
 	}
 
-	outBody = append(outBody, 0xff)
+	out = append(out, 0xff)
+	out = append(out, 0)
 
-	outBody = append(outBody, 0)
-
-	payload := append(header, outBody...)
-	size := uint32(len(payload))
-
-	sizeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizeBytes, size)
-
-	return append(sizeBytes, payload...), nil
+	payload := append(header, out...)
+	return wrapWithSize(payload), nil
 }
 
 func (b *BinaryResponseBuilder) buildFetch(
@@ -177,58 +126,38 @@ func (b *BinaryResponseBuilder) buildFetch(
 ) ([]byte, error) {
 
 	header := make([]byte, 0)
-
-	corr := make([]byte, 4)
-	binary.BigEndian.PutUint32(corr, correlationID)
-	header = append(header, corr...)
-
+	header = appendUint32(header, correlationID)
 	header = append(header, 0)
 
 	out := make([]byte, 0)
 
-	tmp4 := make([]byte, 4)
-	binary.BigEndian.PutUint32(tmp4, uint32(body.ThrottleTimeMs))
-	out = append(out, tmp4...)
+	out = appendInt32(out, body.ThrottleTimeMs)
+	out = appendInt16(out, body.ErrorCode)
+	out = appendInt32(out, body.SessionID)
 
-	tmp2 := make([]byte, 2)
-	binary.BigEndian.PutUint16(tmp2, uint16(body.ErrorCode))
-	out = append(out, tmp2...)
-
-	binary.BigEndian.PutUint32(tmp4, uint32(body.SessionID))
-	out = append(out, tmp4...)
-
-	out = append(out, byte(len(body.Responses)+1))
+	out = appendUvarint(out, uint64(len(body.Responses)+1))
 
 	for _, resp := range body.Responses {
-
 		out = append(out, resp.TopicID[:]...)
 
-		out = append(out, byte(len(resp.Partitions)+1))
+		out = appendUvarint(out, uint64(len(resp.Partitions)+1))
 
 		for _, p := range resp.Partitions {
-			binary.BigEndian.PutUint32(tmp4, uint32(p.PartitionIndex))
-			out = append(out, tmp4...)
+			out = appendInt32(out, p.PartitionIndex)
+			out = appendInt16(out, p.ErrorCode)
+			out = appendInt64(out, p.HighWatermark)
+			out = appendInt64(out, p.LastStableOffset)
+			out = appendInt64(out, p.LogStartOffset)
 
-			binary.BigEndian.PutUint16(tmp2, uint16(p.ErrorCode))
-			out = append(out, tmp2...)
+			out = appendUvarint(out, 1)
+			out = appendInt32(out, -1)
 
-			tmp8 := make([]byte, 8)
-			binary.BigEndian.PutUint64(tmp8, uint64(p.HighWatermark))
-			out = append(out, tmp8...)
-
-			binary.BigEndian.PutUint64(tmp8, uint64(p.LastStableOffset))
-			out = append(out, tmp8...)
-
-			binary.BigEndian.PutUint64(tmp8, uint64(p.LogStartOffset))
-			out = append(out, tmp8...)
-
-			out = append(out, 1)
-
-			tmp4 = make([]byte, 4)
-			binary.BigEndian.PutUint32(tmp4, 0xffffffff)
-			out = append(out, tmp4...)
-
-			out = append(out, 1)
+			if len(p.Records) == 0 {
+				out = appendUvarint(out, 1)
+			} else {
+				out = appendUvarint(out, uint64(len(p.Records)+1))
+				out = append(out, p.Records...)
+			}
 
 			out = append(out, 0)
 		}
@@ -239,10 +168,47 @@ func (b *BinaryResponseBuilder) buildFetch(
 	out = append(out, 0)
 
 	payload := append(header, out...)
+	return wrapWithSize(payload), nil
+}
 
-	size := uint32(len(payload))
-	sizeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizeBytes, size)
+func wrapWithSize(payload []byte) []byte {
+	var size [4]byte
+	binary.BigEndian.PutUint32(size[:], uint32(len(payload)))
+	return append(size[:], payload...)
+}
 
-	return append(sizeBytes, payload...), nil
+func appendUint16(buf []byte, v uint16) []byte {
+	var tmp [2]byte
+	binary.BigEndian.PutUint16(tmp[:], v)
+	return append(buf, tmp[:]...)
+}
+
+func appendUint32(buf []byte, v uint32) []byte {
+	var tmp [4]byte
+	binary.BigEndian.PutUint32(tmp[:], v)
+	return append(buf, tmp[:]...)
+}
+
+func appendUint64(buf []byte, v uint64) []byte {
+	var tmp [8]byte
+	binary.BigEndian.PutUint64(tmp[:], v)
+	return append(buf, tmp[:]...)
+}
+
+func appendUvarint(buf []byte, v uint64) []byte {
+	var tmp [10]byte
+	n := binary.PutUvarint(tmp[:], v)
+	return append(buf, tmp[:n]...)
+}
+
+func appendInt16(buf []byte, v int16) []byte {
+	return appendUint16(buf, uint16(v))
+}
+
+func appendInt32(buf []byte, v int32) []byte {
+	return appendUint32(buf, uint32(v))
+}
+
+func appendInt64(buf []byte, v int64) []byte {
+	return appendUint64(buf, uint64(v))
 }

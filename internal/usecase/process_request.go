@@ -12,10 +12,11 @@ import (
 
 type RequestProcessor struct {
 	metadataRepo ports.MetadataRepository
+	logManager   ports.LogManager
 }
 
-func NewRequestProcessor(metadataRepo ports.MetadataRepository) *RequestProcessor {
-	return &RequestProcessor{metadataRepo: metadataRepo}
+func NewRequestProcessor(metadataRepo ports.MetadataRepository, logManager ports.LogManager) *RequestProcessor {
+	return &RequestProcessor{metadataRepo: metadataRepo, logManager: logManager}
 }
 
 func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.MessageResponse, error) {
@@ -120,8 +121,9 @@ func (p *RequestProcessor) processFetch(
 	responses := make([]response.FetchTopicResponse, 0, len(r.Topics))
 
 	for _, t := range r.Topics {
-		meta, _ := p.metadataRepo.GetTopicByID(t.TopicID)
-
+		meta, err := p.metadataRepo.GetTopicByID(t.TopicID)
+		if err != nil || meta == nil {
+		}
 		partition := response.FetchPartitionResponse{
 			PartitionIndex:   0,
 			ErrorCode:        domain.ErrorUnknownTopicId,
@@ -133,6 +135,12 @@ func (p *RequestProcessor) processFetch(
 
 		if meta != nil {
 			partition.ErrorCode = 0
+			raw, err := p.logManager.LoadLog(meta.Name, 0)
+			if err != nil {
+				raw = nil
+			}
+			fmt.Println(raw)
+			partition.Records = raw
 		}
 
 		topicResp := response.FetchTopicResponse{
