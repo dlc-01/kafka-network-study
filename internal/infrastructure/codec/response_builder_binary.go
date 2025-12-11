@@ -65,7 +65,7 @@ func (b *BinaryResponseBuilder) buildDescribeTopicPartitions(
 
 	header := make([]byte, 0)
 	header = appendUint32(header, correlationID)
-	header = append(header, 0) // header tagged fields
+	header = append(header, 0)
 
 	out := make([]byte, 0)
 
