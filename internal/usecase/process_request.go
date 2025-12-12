@@ -202,6 +202,9 @@ func (p *RequestProcessor) processProduce(
 				}
 
 				if partitionExists {
+					err := p.logManager.AppendLog(t.Name, part.Index, part.Records)
+					if err != nil {
+					}
 					pr.ErrorCode = 0
 					pr.BaseOffset = 0
 					pr.LogAppendTimeMs = -1

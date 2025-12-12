@@ -16,5 +16,6 @@ type ProduceTopic struct {
 }
 
 type ProducePartition struct {
-	Index int32
+	Index   int32
+	Records []byte
 }

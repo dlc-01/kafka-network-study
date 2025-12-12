@@ -294,7 +294,8 @@ func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
 			pIdx := int32(binary.BigEndian.Uint32(payload[offset : offset+4]))
 			offset += 4
 
-			if err := skipCompactBytes(payload, &offset); err != nil {
+			records, err := readCompactBytes(payload, &offset)
+			if err != nil {
 				return nil, err
 			}
 
@@ -303,7 +304,8 @@ func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
 			}
 
 			topic.Partitions = append(topic.Partitions, request.ProducePartition{
-				Index: pIdx,
+				Index:   pIdx,
+				Records: records,
 			})
 		}
 
@@ -315,6 +317,26 @@ func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
 	}
 
 	return r, nil
+}
+
+func readCompactBytes(b []byte, offset *int) ([]byte, error) {
+	lnPlus1, err := readUvarintPayload(b, offset)
+	if err != nil {
+		return nil, err
+	}
+	if lnPlus1 == 0 {
+		return nil, nil
+	}
+	ln := int(lnPlus1) - 1
+	if ln < 0 {
+		return nil, nil
+	}
+	if *offset+ln > len(b) {
+		return nil, errors.New("compact bytes truncated")
+	}
+	out := b[*offset : *offset+ln]
+	*offset += ln
+	return out, nil
 }
 
 func readUvarintPayload(b []byte, offset *int) (uint64, error) {
