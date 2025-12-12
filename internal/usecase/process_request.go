@@ -26,6 +26,8 @@ func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.Messa
 		return p.processApiVersions(req.Header), nil
 	case *request.DescribeTopicPartitionsRequest:
 		return p.processDescribeTopicPartitions(req.Header, body), nil
+	case *request.ProduceRequest:
+		return p.processProduce(req.Header, body), nil
 	case *request.FetchRequest:
 		return p.processFetch(req.Header, body), nil
 	default:
@@ -157,6 +159,37 @@ func (p *RequestProcessor) processFetch(
 		ErrorCode:      0,
 		SessionID:      0,
 		Responses:      responses,
+	}
+
+	return &response.MessageResponse{
+		CorrelationID: h.CorrelationID,
+		HeaderVersion: 1,
+		Body:          body,
+	}
+}
+func (p *RequestProcessor) processProduce(
+	h request.RequestHeader,
+	r *request.ProduceRequest,
+) *response.MessageResponse {
+
+	topicResp := response.ProduceTopicResponse{
+		Name: r.Topics[0].Name,
+	}
+
+	for _, part := range r.Topics[0].Partitions {
+		topicResp.Partitions = append(topicResp.Partitions,
+			response.ProducePartitionResponse{
+				Index:           part.Index,
+				ErrorCode:       domain.ErrorUnknownTopicOrPartition,
+				BaseOffset:      -1,
+				LogAppendTimeMs: -1,
+				LogStartOffset:  -1,
+			})
+	}
+
+	body := &response.ProduceResponseBody{
+		ThrottleTimeMs: 0,
+		Topics:         []response.ProduceTopicResponse{topicResp},
 	}
 
 	return &response.MessageResponse{

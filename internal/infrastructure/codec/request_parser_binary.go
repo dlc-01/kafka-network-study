@@ -48,7 +48,10 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 			return nil, err
 		}
 	case domain.ProduceApiKey:
-		body = &request.ProduceRequest{}
+		body, err = parseProduceRequest(payload)
+		if err != nil {
+			return nil, err
+		}
 
 	default:
 		body = &request.ApiVersionsRequest{}
@@ -221,4 +224,183 @@ func parseFetchRequest(payload []byte) (*request.FetchRequest, error) {
 	})
 
 	return r, nil
+}
+
+func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
+	offset := 0
+	r := &request.ProduceRequest{}
+
+	if len(payload) < offset+2 {
+		return nil, errors.New("produce: too short for client_id length")
+	}
+	clientLen := int(int16(binary.BigEndian.Uint16(payload[offset : offset+2])))
+	offset += 2
+
+	if clientLen >= 0 {
+		if len(payload) < offset+clientLen {
+			return nil, errors.New("produce: too short for client_id bytes")
+		}
+		offset += clientLen
+	}
+
+	if _, err := skipTagBuffer(payload, &offset); err != nil {
+		return nil, err
+	}
+
+	if _, err := readCompactNullableString(payload, &offset); err != nil {
+		return nil, err
+	}
+
+	if len(payload) < offset+2 {
+		return nil, errors.New("produce: missing acks")
+	}
+	offset += 2
+
+	if len(payload) < offset+4 {
+		return nil, errors.New("produce: missing timeout_ms")
+	}
+	offset += 4
+
+	topicsCountPlus1, err := readUvarintPayload(payload, &offset)
+	if err != nil {
+		return nil, err
+	}
+	topicsCount := int(topicsCountPlus1) - 1
+	if topicsCount < 0 {
+		return nil, errors.New("produce: invalid topics count")
+	}
+
+	for i := 0; i < topicsCount; i++ {
+		name, err := readCompactString(payload, &offset)
+		if err != nil {
+			return nil, err
+		}
+
+		topic := request.ProduceTopic{Name: name}
+
+		partsCountPlus1, err := readUvarintPayload(payload, &offset)
+		if err != nil {
+			return nil, err
+		}
+		partsCount := int(partsCountPlus1) - 1
+		if partsCount < 0 {
+			return nil, errors.New("produce: invalid partitions count")
+		}
+
+		for j := 0; j < partsCount; j++ {
+			if len(payload) < offset+4 {
+				return nil, errors.New("produce: truncated partition index")
+			}
+			pIdx := int32(binary.BigEndian.Uint32(payload[offset : offset+4]))
+			offset += 4
+
+			if err := skipCompactBytes(payload, &offset); err != nil {
+				return nil, err
+			}
+
+			if _, err := skipTagBuffer(payload, &offset); err != nil {
+				return nil, err
+			}
+
+			topic.Partitions = append(topic.Partitions, request.ProducePartition{
+				Index: pIdx,
+			})
+		}
+
+		if _, err := skipTagBuffer(payload, &offset); err != nil {
+			return nil, err
+		}
+
+		r.Topics = append(r.Topics, topic)
+	}
+
+	return r, nil
+}
+
+func readUvarintPayload(b []byte, offset *int) (uint64, error) {
+	v, n := binary.Uvarint(b[*offset:])
+	if n <= 0 {
+		return 0, errors.New("uvarint decode error")
+	}
+	*offset += n
+	return v, nil
+}
+
+func readCompactString(b []byte, offset *int) (string, error) {
+	lnPlus1, err := readUvarintPayload(b, offset)
+	if err != nil {
+		return "", err
+	}
+	ln := int(lnPlus1) - 1
+	if ln < 0 {
+		return "", nil
+	}
+	if len(b) < *offset+ln {
+		return "", errors.New("compact string truncated")
+	}
+	s := string(b[*offset : *offset+ln])
+	*offset += ln
+	return s, nil
+}
+
+func readCompactNullableString(b []byte, offset *int) (*string, error) {
+	lnPlus1, err := readUvarintPayload(b, offset)
+	if err != nil {
+		return nil, err
+	}
+	if lnPlus1 == 0 {
+		return nil, nil
+	}
+	ln := int(lnPlus1) - 1
+	if ln < 0 {
+		return nil, nil
+	}
+	if len(b) < *offset+ln {
+		return nil, errors.New("compact nullable string truncated")
+	}
+	s := string(b[*offset : *offset+ln])
+	*offset += ln
+	return &s, nil
+}
+
+func skipCompactBytes(b []byte, offset *int) error {
+	lnPlus1, err := readUvarintPayload(b, offset)
+	if err != nil {
+		return err
+	}
+	if lnPlus1 == 0 {
+		return nil
+	}
+	ln := int(lnPlus1) - 1
+	if ln < 0 {
+		return nil
+	}
+	*offset += ln
+	if *offset > len(b) {
+		return errors.New("compact bytes truncated")
+	}
+	return nil
+}
+
+func skipTagBuffer(b []byte, offset *int) (uint64, error) {
+	numTags, err := readUvarintPayload(b, offset)
+	if err != nil {
+		return 0, errors.New("tag buffer truncated")
+	}
+
+	for i := uint64(0); i < numTags; i++ {
+		if _, err := readUvarintPayload(b, offset); err != nil {
+			return 0, errors.New("tag id truncated")
+		}
+		size, err := readUvarintPayload(b, offset)
+		if err != nil {
+			return 0, errors.New("tag size truncated")
+		}
+		if len(b) < *offset+int(size) {
+			return 0, errors.New("tag value truncated")
+		}
+		*offset += int(size)
+	}
+
+	return numTags, nil
 }

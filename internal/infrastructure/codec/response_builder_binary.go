@@ -26,6 +26,8 @@ func (b *BinaryResponseBuilder) Build(resp *response.MessageResponse) ([]byte, e
 		return b.buildDescribeTopicPartitions(resp.CorrelationID, body)
 	case *response.FetchResponseBody:
 		return b.buildFetch(resp.CorrelationID, body)
+	case *response.ProduceResponseBody:
+		return b.buildProduce(resp.CorrelationID, body)
 	default:
 		return nil, errors.New("unsupported response body type")
 	}
@@ -166,6 +168,48 @@ func (b *BinaryResponseBuilder) buildFetch(
 	}
 
 	out = append(out, 0)
+
+	payload := append(header, out...)
+	return wrapWithSize(payload), nil
+}
+
+func (b *BinaryResponseBuilder) buildProduce(
+	correlationID uint32,
+	body *response.ProduceResponseBody,
+) ([]byte, error) {
+
+	header := make([]byte, 0)
+	header = appendUint32(header, correlationID)
+	header = append(header, 0)
+
+	out := make([]byte, 0)
+
+	out = appendUvarint(out, uint64(len(body.Topics)+1))
+
+	for _, t := range body.Topics {
+		out = appendUvarint(out, uint64(len(t.Name)+1))
+		out = append(out, t.Name...)
+
+		out = appendUvarint(out, uint64(len(t.Partitions)+1))
+
+		for _, p := range t.Partitions {
+			out = appendInt32(out, p.Index)
+			out = appendInt16(out, p.ErrorCode)
+			out = appendInt64(out, p.BaseOffset)
+			out = appendInt64(out, p.LogAppendTimeMs)
+			out = appendInt64(out, p.LogStartOffset)
+
+			out = appendUvarint(out, 0)
+			out = appendUvarint(out, 0)
+			out = appendUvarint(out, 0)
+		}
+
+		out = appendUvarint(out, 0)
+	}
+
+	out = appendInt32(out, body.ThrottleTimeMs)
+
+	out = appendUvarint(out, 0)
 
 	payload := append(header, out...)
 	return wrapWithSize(payload), nil
