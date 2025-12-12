@@ -227,79 +227,115 @@ func parseFetchRequest(payload []byte) (*request.FetchRequest, error) {
 }
 
 func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
-	offset := 0
 	r := &request.ProduceRequest{}
+	offset := 0
 
-	if len(payload) < offset+2 {
-		return nil, errors.New("produce: too short for client_id length")
+	if offset >= len(payload) {
+		return nil, errors.New("produce: truncated transactional_id")
 	}
-	clientLen := int(int16(binary.BigEndian.Uint16(payload[offset : offset+2])))
-	offset += 2
-
-	if clientLen >= 0 {
-		if len(payload) < offset+clientLen {
-			return nil, errors.New("produce: too short for client_id bytes")
+	ln, n := binary.Uvarint(payload[offset:])
+	if n <= 0 {
+		return nil, errors.New("produce: invalid transactional_id varint")
+	}
+	offset += n
+	if ln > 0 {
+		strLen := int(ln) - 1
+		if strLen < 0 {
+			strLen = 0
 		}
-		offset += clientLen
+		if offset+strLen > len(payload) {
+			return nil, errors.New("produce: truncated transactional_id")
+		}
+		offset += strLen
 	}
 
-	if _, err := skipTagBuffer(payload, &offset); err != nil {
-		return nil, err
-	}
-
-	if _, err := readCompactNullableString(payload, &offset); err != nil {
-		return nil, err
-	}
-
-	if len(payload) < offset+2 {
+	if offset+2 > len(payload) {
 		return nil, errors.New("produce: missing acks")
 	}
 	offset += 2
 
-	if len(payload) < offset+4 {
+	if offset+4 > len(payload) {
 		return nil, errors.New("produce: missing timeout_ms")
 	}
 	offset += 4
 
-	topicsCountPlus1, err := readUvarintPayload(payload, &offset)
-	if err != nil {
-		return nil, err
+	if offset >= len(payload) {
+		return nil, errors.New("produce: missing topics array")
 	}
-	topicsCount := int(topicsCountPlus1) - 1
+	topicsLen, n := binary.Uvarint(payload[offset:])
+	if n <= 0 {
+		return nil, errors.New("produce: invalid topics array varint")
+	}
+	offset += n
+
+	topicsCount := int(topicsLen) - 1
 	if topicsCount < 0 {
 		return nil, errors.New("produce: invalid topics count")
 	}
 
 	for i := 0; i < topicsCount; i++ {
-		name, err := readCompactString(payload, &offset)
-		if err != nil {
-			return nil, err
+		nameLenPlus1, n := binary.Uvarint(payload[offset:])
+		if n <= 0 {
+			return nil, errors.New("produce: invalid topic name varint")
 		}
+		offset += n
+
+		nameLen := int(nameLenPlus1) - 1
+		if nameLen < 0 {
+			nameLen = 0
+		}
+		if offset+nameLen > len(payload) {
+			return nil, errors.New("produce: truncated topic name")
+		}
+		name := string(payload[offset : offset+nameLen])
+		offset += nameLen
 
 		topic := request.ProduceTopic{Name: name}
 
-		partsCountPlus1, err := readUvarintPayload(payload, &offset)
-		if err != nil {
-			return nil, err
+		partsLen, n := binary.Uvarint(payload[offset:])
+		if n <= 0 {
+			return nil, errors.New("produce: invalid partitions array varint")
 		}
-		partsCount := int(partsCountPlus1) - 1
+		offset += n
+
+		partsCount := int(partsLen) - 1
 		if partsCount < 0 {
 			return nil, errors.New("produce: invalid partitions count")
 		}
 
 		for j := 0; j < partsCount; j++ {
-			if len(payload) < offset+4 {
+			if offset+4 > len(payload) {
 				return nil, errors.New("produce: truncated partition index")
 			}
-			pIdx := int32(binary.BigEndian.Uint32(payload[offset : offset+4]))
+			pIdx := int32(binary.BigEndian.Uint32(payload[offset:]))
 			offset += 4
 
-			if err := skipCompactBytes(payload, &offset); err != nil {
-				return nil, err
+			recLenPlus1, n := binary.Uvarint(payload[offset:])
+			if n <= 0 {
+				return nil, errors.New("produce: invalid records length")
 			}
+			offset += n
 
-			if _, err := skipTagBuffer(payload, &offset); err != nil {
-				return nil, err
+			recLen := int(recLenPlus1) - 1
+			if recLen < 0 {
+				recLen = 0
+			}
+			if offset+recLen > len(payload) {
+				return nil, errors.New("produce: truncated records")
+			}
+			offset += recLen
+
+			tagCount, n := binary.Uvarint(payload[offset:])
+			if n <= 0 {
+				return nil, errors.New("produce: invalid partition tag buffer")
+			}
+			offset += n
+			for t := uint64(0); t < tagCount; t++ {
+				_, n := binary.Uvarint(payload[offset:])
+				offset += n
+				size, n := binary.Uvarint(payload[offset:])
+				offset += n
+				offset += int(size)
 			}
 
 			topic.Partitions = append(topic.Partitions, request.ProducePartition{
@@ -307,8 +343,17 @@ func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
 			})
 		}
 
-		if _, err := skipTagBuffer(payload, &offset); err != nil {
-			return nil, err
+		tagCount, n := binary.Uvarint(payload[offset:])
+		if n <= 0 {
+			return nil, errors.New("produce: invalid topic tag buffer")
+		}
+		offset += n
+		for t := uint64(0); t < tagCount; t++ {
+			_, n := binary.Uvarint(payload[offset:])
+			offset += n
+			size, n := binary.Uvarint(payload[offset:])
+			offset += n
+			offset += int(size)
 		}
 
 		r.Topics = append(r.Topics, topic)
