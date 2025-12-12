@@ -172,24 +172,52 @@ func (p *RequestProcessor) processProduce(
 	r *request.ProduceRequest,
 ) *response.MessageResponse {
 
-	topicResp := response.ProduceTopicResponse{
-		Name: r.Topics[0].Name,
-	}
+	topicsResp := make([]response.ProduceTopicResponse, 0, len(r.Topics))
 
-	for _, part := range r.Topics[0].Partitions {
-		topicResp.Partitions = append(topicResp.Partitions,
-			response.ProducePartitionResponse{
+	for _, t := range r.Topics {
+		tr := response.ProduceTopicResponse{
+			Name:       t.Name,
+			Partitions: make([]response.ProducePartitionResponse, 0, len(t.Partitions)),
+		}
+
+		meta, err := p.metadataRepo.GetTopic(t.Name)
+		topicExists := err == nil && meta != nil
+
+		for _, part := range t.Partitions {
+			pr := response.ProducePartitionResponse{
 				Index:           part.Index,
 				ErrorCode:       domain.ErrorUnknownTopicOrPartition,
 				BaseOffset:      -1,
 				LogAppendTimeMs: -1,
 				LogStartOffset:  -1,
-			})
+			}
+
+			if topicExists {
+				partitionExists := false
+				for _, pm := range meta.Partitions {
+					if pm.PartitionIndex == part.Index {
+						partitionExists = true
+						break
+					}
+				}
+
+				if partitionExists {
+					pr.ErrorCode = 0
+					pr.BaseOffset = 0
+					pr.LogAppendTimeMs = -1
+					pr.LogStartOffset = 0
+				}
+			}
+
+			tr.Partitions = append(tr.Partitions, pr)
+		}
+
+		topicsResp = append(topicsResp, tr)
 	}
 
 	body := &response.ProduceResponseBody{
 		ThrottleTimeMs: 0,
-		Topics:         []response.ProduceTopicResponse{topicResp},
+		Topics:         topicsResp,
 	}
 
 	return &response.MessageResponse{
