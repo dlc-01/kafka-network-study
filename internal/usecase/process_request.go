@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/codecrafters-io/kafka-starter-go/internal/domain"
@@ -15,40 +14,55 @@ type RequestProcessor struct {
 	logManager   ports.LogManager
 }
 
-func NewRequestProcessor(metadataRepo ports.MetadataRepository, logManager ports.LogManager) *RequestProcessor {
-	return &RequestProcessor{metadataRepo: metadataRepo, logManager: logManager}
+func NewRequestProcessor(
+	metadataRepo ports.MetadataRepository,
+	logManager ports.LogManager,
+) *RequestProcessor {
+	return &RequestProcessor{
+		metadataRepo: metadataRepo,
+		logManager:   logManager,
+	}
 }
 
-func (p *RequestProcessor) Process(req *request.MessageRequest) (*response.MessageResponse, error) {
-	fmt.Println(req)
+func (p *RequestProcessor) Process(
+	req *request.MessageRequest,
+) (*response.MessageResponse, error) {
+
 	switch body := req.Body.(type) {
 	case *request.ApiVersionsRequest:
 		return p.processApiVersions(req.Header), nil
+
 	case *request.DescribeTopicPartitionsRequest:
 		return p.processDescribeTopicPartitions(req.Header, body), nil
-	case *request.ProduceRequest:
-		return p.processProduce(req.Header, body), nil
+
 	case *request.FetchRequest:
 		return p.processFetch(req.Header, body), nil
+
+	case *request.ProduceRequest:
+		return p.processProduce(req.Header, body), nil
+
 	default:
 		return p.processApiVersions(req.Header), nil
 	}
 }
 
-func (p *RequestProcessor) processApiVersions(h request.RequestHeader) *response.MessageResponse {
-	var errCode uint16
+func (p *RequestProcessor) processApiVersions(
+	h request.RequestHeader,
+) *response.MessageResponse {
 
+	var errorCode uint16
 	if h.ApiVersion > domain.MaximumVersionApiKey {
-		errCode = domain.ErrorNotSupportedApiVersion
+		errorCode = domain.ErrorNotSupportedApiVersion
 	}
 
 	body := &response.ApiVersionsResponseBody{
-		ErrorCode: errCode,
+		ErrorCode: errorCode,
 		ApiKeys: []response.ApiKeyResponse{
 			response.GetApiVersions(),
 			response.GetDescribeTopicPartitionsApikey(),
 			response.GetFetchApiKey(),
-			response.GetProduceApiKey()},
+			response.GetProduceApiKey(),
+		},
 		ThrottleTime: 0,
 	}
 
@@ -58,7 +72,11 @@ func (p *RequestProcessor) processApiVersions(h request.RequestHeader) *response
 	}
 }
 
-func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeader, r *request.DescribeTopicPartitionsRequest) *response.MessageResponse {
+func (p *RequestProcessor) processDescribeTopicPartitions(
+	h request.RequestHeader,
+	r *request.DescribeTopicPartitionsRequest,
+) *response.MessageResponse {
+
 	topics := make([]response.TopicDescription, 0, len(r.Topics))
 
 	for _, t := range r.Topics {
@@ -75,7 +93,7 @@ func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeade
 			continue
 		}
 
-		td := response.TopicDescription{
+		topicDesc := response.TopicDescription{
 			ErrorCode:    0,
 			Name:         meta.Name,
 			TopicID:      meta.TopicID,
@@ -83,21 +101,24 @@ func (p *RequestProcessor) processDescribeTopicPartitions(h request.RequestHeade
 			AuthorizedOp: 0,
 		}
 
-		for _, pmeta := range meta.Partitions {
-			td.Partitions = append(td.Partitions, response.PartitionDescription{
-				ErrorCode:       0,
-				PartitionIndex:  pmeta.PartitionIndex,
-				LeaderID:        pmeta.LeaderID,
-				LeaderEpoch:     pmeta.LeaderEpoch,
-				Replicas:        pmeta.Replicas,
-				ISR:             pmeta.ISR,
-				EligibleLeaders: []int32{},
-				LastKnownELR:    []int32{},
-				OfflineReplicas: []int32{},
-			})
+		for _, pm := range meta.Partitions {
+			topicDesc.Partitions = append(
+				topicDesc.Partitions,
+				response.PartitionDescription{
+					ErrorCode:       0,
+					PartitionIndex:  pm.PartitionIndex,
+					LeaderID:        pm.LeaderID,
+					LeaderEpoch:     pm.LeaderEpoch,
+					Replicas:        pm.Replicas,
+					ISR:             pm.ISR,
+					EligibleLeaders: []int32{},
+					LastKnownELR:    []int32{},
+					OfflineReplicas: []int32{},
+				},
+			)
 		}
 
-		topics = append(topics, td)
+		topics = append(topics, topicDesc)
 	}
 
 	sort.Slice(topics, func(i, j int) bool {
@@ -121,13 +142,13 @@ func (p *RequestProcessor) processFetch(
 	h request.RequestHeader,
 	r *request.FetchRequest,
 ) *response.MessageResponse {
+
 	responses := make([]response.FetchTopicResponse, 0, len(r.Topics))
 
 	for _, t := range r.Topics {
-		meta, err := p.metadataRepo.GetTopicByID(t.TopicID)
-		if err != nil || meta == nil {
-		}
-		partition := response.FetchPartitionResponse{
+		meta, _ := p.metadataRepo.GetTopicByID(t.TopicID)
+
+		partitionResp := response.FetchPartitionResponse{
 			PartitionIndex:   0,
 			ErrorCode:        domain.ErrorUnknownTopicId,
 			HighWatermark:    0,
@@ -137,21 +158,22 @@ func (p *RequestProcessor) processFetch(
 		}
 
 		if meta != nil {
-			partition.ErrorCode = 0
 			raw, err := p.logManager.LoadLog(meta.Name, 0)
 			if err != nil {
 				raw = nil
 			}
-			fmt.Println(raw)
-			partition.Records = raw
+
+			partitionResp.ErrorCode = 0
+			partitionResp.Records = raw
 		}
 
-		topicResp := response.FetchTopicResponse{
-			TopicID:    t.TopicID,
-			Partitions: []response.FetchPartitionResponse{partition},
-		}
-
-		responses = append(responses, topicResp)
+		responses = append(
+			responses,
+			response.FetchTopicResponse{
+				TopicID:    t.TopicID,
+				Partitions: []response.FetchPartitionResponse{partitionResp},
+			},
+		)
 	}
 
 	body := &response.FetchResponseBody{
@@ -167,15 +189,16 @@ func (p *RequestProcessor) processFetch(
 		Body:          body,
 	}
 }
+
 func (p *RequestProcessor) processProduce(
 	h request.RequestHeader,
 	r *request.ProduceRequest,
 ) *response.MessageResponse {
 
-	topicsResp := make([]response.ProduceTopicResponse, 0, len(r.Topics))
+	topics := make([]response.ProduceTopicResponse, 0, len(r.Topics))
 
 	for _, t := range r.Topics {
-		tr := response.ProduceTopicResponse{
+		topicResp := response.ProduceTopicResponse{
 			Name:       t.Name,
 			Partitions: make([]response.ProducePartitionResponse, 0, len(t.Partitions)),
 		}
@@ -184,7 +207,7 @@ func (p *RequestProcessor) processProduce(
 		topicExists := err == nil && meta != nil
 
 		for _, part := range t.Partitions {
-			pr := response.ProducePartitionResponse{
+			partitionResp := response.ProducePartitionResponse{
 				Index:           part.Index,
 				ErrorCode:       domain.ErrorUnknownTopicOrPartition,
 				BaseOffset:      -1,
@@ -192,33 +215,24 @@ func (p *RequestProcessor) processProduce(
 				LogStartOffset:  -1,
 			}
 
-			if topicExists {
-				partitionExists := false
-				for _, pm := range meta.Partitions {
-					if pm.PartitionIndex == part.Index {
-						partitionExists = true
-						break
-					}
-				}
+			if topicExists && partitionExists(meta, part.Index) {
+				p.logManager.AppendLog(t.Name, part.Index, part.Records)
 
-				if partitionExists {
-					p.logManager.AppendLog(t.Name, part.Index, part.Records)
-					pr.ErrorCode = 0
-					pr.BaseOffset = 0
-					pr.LogAppendTimeMs = -1
-					pr.LogStartOffset = 0
-				}
+				partitionResp.ErrorCode = 0
+				partitionResp.BaseOffset = 0
+				partitionResp.LogAppendTimeMs = -1
+				partitionResp.LogStartOffset = 0
 			}
 
-			tr.Partitions = append(tr.Partitions, pr)
+			topicResp.Partitions = append(topicResp.Partitions, partitionResp)
 		}
 
-		topicsResp = append(topicsResp, tr)
+		topics = append(topics, topicResp)
 	}
 
 	body := &response.ProduceResponseBody{
 		ThrottleTimeMs: 0,
-		Topics:         topicsResp,
+		Topics:         topics,
 	}
 
 	return &response.MessageResponse{
@@ -226,4 +240,13 @@ func (p *RequestProcessor) processProduce(
 		HeaderVersion: 1,
 		Body:          body,
 	}
+}
+
+func partitionExists(meta *domain.TopicMetadata, index int32) bool {
+	for _, p := range meta.Partitions {
+		if p.PartitionIndex == index {
+			return true
+		}
+	}
+	return false
 }
