@@ -62,8 +62,6 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 	}, nil
 }
 
-/* ========================= DescribeTopicPartitions ========================= */
-
 func parseDescribeTopicPartitionsRequest(b []byte) (*request.DescribeTopicPartitionsRequest, error) {
 	offset := 0
 
@@ -136,8 +134,6 @@ func parseDescribeTopicPartitionsRequest(b []byte) (*request.DescribeTopicPartit
 	}, nil
 }
 
-/* ================================ Fetch =================================== */
-
 func parseFetchRequest(b []byte) (*request.FetchRequest, error) {
 	offset := 0
 	r := &request.FetchRequest{}
@@ -158,12 +154,12 @@ func parseFetchRequest(b []byte) (*request.FetchRequest, error) {
 	}
 	offset++
 
-	offset += 4 // max_wait_ms
-	offset += 4 // min_bytes
-	offset += 4 // max_bytes
-	offset++    // isolation_level
-	offset += 4 // session_id
-	offset += 4 // session_epoch
+	offset += 4
+	offset += 4
+	offset += 4
+	offset++
+	offset += 4
+	offset += 4
 
 	topicsPlus1, err := readUvarintPayload(b, &offset)
 	if err != nil {
@@ -186,8 +182,6 @@ func parseFetchRequest(b []byte) (*request.FetchRequest, error) {
 	r.Topics = append(r.Topics, request.FetchTopic{TopicID: id})
 	return r, nil
 }
-
-/* ================================ Produce ================================= */
 
 func parseProduceRequest(b []byte) (*request.ProduceRequest, error) {
 	offset := 0
@@ -214,8 +208,8 @@ func parseProduceRequest(b []byte) (*request.ProduceRequest, error) {
 		return nil, err
 	}
 
-	offset += 2 // acks
-	offset += 4 // timeout_ms
+	offset += 2
+	offset += 4
 
 	topicsPlus1, err := readUvarintPayload(b, &offset)
 	if err != nil {
@@ -274,8 +268,6 @@ func parseProduceRequest(b []byte) (*request.ProduceRequest, error) {
 
 	return r, nil
 }
-
-/* ================================ Helpers ================================= */
 
 func need(b []byte, offset, size int, ctx string) error {
 	if len(b) < offset+size {

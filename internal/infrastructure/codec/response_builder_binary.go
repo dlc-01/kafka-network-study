@@ -16,20 +16,24 @@ func NewBinaryResponseBuilder() ports.ResponseBuilder {
 
 func (b *BinaryResponseBuilder) Build(resp *response.MessageResponse) ([]byte, error) {
 	if resp.Body == nil {
-		return nil, errors.New("nil response body")
+		return nil, errors.New("response: nil body")
 	}
 
 	switch body := resp.Body.(type) {
 	case *response.ApiVersionsResponseBody:
 		return b.buildApiVersions(resp.CorrelationID, body)
+
 	case *response.DescribeTopicPartitionsResponseBody:
 		return b.buildDescribeTopicPartitions(resp.CorrelationID, body)
+
 	case *response.FetchResponseBody:
 		return b.buildFetch(resp.CorrelationID, body)
+
 	case *response.ProduceResponseBody:
 		return b.buildProduce(resp.CorrelationID, body)
+
 	default:
-		return nil, errors.New("unsupported response body type")
+		return nil, errors.New("response: unsupported body type")
 	}
 }
 
@@ -42,8 +46,8 @@ func (b *BinaryResponseBuilder) buildApiVersions(
 	header = appendUint32(header, correlationID)
 
 	out := make([]byte, 0)
-	out = appendUint16(out, body.ErrorCode)
 
+	out = appendUint16(out, body.ErrorCode)
 	out = append(out, byte(len(body.ApiKeys)+1))
 
 	for _, k := range body.ApiKeys {
@@ -139,12 +143,12 @@ func (b *BinaryResponseBuilder) buildFetch(
 
 	out = appendUvarint(out, uint64(len(body.Responses)+1))
 
-	for _, resp := range body.Responses {
-		out = append(out, resp.TopicID[:]...)
+	for _, r := range body.Responses {
+		out = append(out, r.TopicID[:]...)
 
-		out = appendUvarint(out, uint64(len(resp.Partitions)+1))
+		out = appendUvarint(out, uint64(len(r.Partitions)+1))
 
-		for _, p := range resp.Partitions {
+		for _, p := range r.Partitions {
 			out = appendInt32(out, p.PartitionIndex)
 			out = appendInt16(out, p.ErrorCode)
 			out = appendInt64(out, p.HighWatermark)
@@ -208,7 +212,6 @@ func (b *BinaryResponseBuilder) buildProduce(
 	}
 
 	out = appendInt32(out, body.ThrottleTimeMs)
-
 	out = appendUvarint(out, 0)
 
 	payload := append(header, out...)
