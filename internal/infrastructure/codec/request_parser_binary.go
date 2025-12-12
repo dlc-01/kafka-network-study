@@ -17,11 +17,10 @@ func NewBinaryRequestParser() ports.RequestParser {
 
 func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error) {
 	if len(data) < 12 {
-		return nil, errors.New("buffer too short for request header")
+		return nil, errors.New("request: buffer too short for header")
 	}
 
 	size := binary.BigEndian.Uint32(data[:4])
-
 	header := request.RequestHeader{
 		ApiKey:        binary.BigEndian.Uint16(data[4:6]),
 		ApiVersion:    binary.BigEndian.Uint16(data[6:8]),
@@ -30,8 +29,10 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 
 	payload := data[12:]
 
-	var body request.RequestBody
-	var err error
+	var (
+		body request.RequestBody
+		err  error
+	)
 
 	switch header.ApiKey {
 	case domain.ApiVersionApikey:
@@ -39,22 +40,19 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 
 	case domain.DescribeTopicPartitionsApikey:
 		body, err = parseDescribeTopicPartitionsRequest(payload)
-		if err != nil {
-			return nil, err
-		}
+
 	case domain.FetchApikey:
 		body, err = parseFetchRequest(payload)
-		if err != nil {
-			return nil, err
-		}
+
 	case domain.ProduceApiKey:
 		body, err = parseProduceRequest(payload)
-		if err != nil {
-			return nil, err
-		}
 
 	default:
 		body = &request.ApiVersionsRequest{}
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &request.MessageRequest{
@@ -64,68 +62,71 @@ func (p *BinaryRequestParser) Parse(data []byte) (*request.MessageRequest, error
 	}, nil
 }
 
-func parseDescribeTopicPartitionsRequest(payload []byte) (*request.DescribeTopicPartitionsRequest, error) {
-	if len(payload) < 2 {
-		return nil, errors.New("payload too short for client_id length")
+/* ========================= DescribeTopicPartitions ========================= */
+
+func parseDescribeTopicPartitionsRequest(b []byte) (*request.DescribeTopicPartitionsRequest, error) {
+	offset := 0
+
+	if err := need(b, offset, 2, "describe: client_id length"); err != nil {
+		return nil, err
 	}
+	clientLen := int(binary.BigEndian.Uint16(b[offset:]))
+	offset += 2
 
-	clientLen := int(binary.BigEndian.Uint16(payload[0:2]))
-	offset := 2
-
-	if len(payload) < offset+clientLen {
-		return nil, errors.New("payload too short for client_id bytes")
+	if err := need(b, offset, clientLen, "describe: client_id bytes"); err != nil {
+		return nil, err
 	}
 	offset += clientLen
 
-	if len(payload) < offset+1 {
-		return nil, errors.New("payload too short for TAG_BUFFER after client_id")
+	if err := need(b, offset, 1, "describe: client tag buffer"); err != nil {
+		return nil, err
 	}
 	offset++
 
-	if len(payload) < offset+1 {
-		return nil, errors.New("payload too short for topics compact array length")
+	if err := need(b, offset, 1, "describe: topics length"); err != nil {
+		return nil, err
 	}
-	topicsLenByte := int(payload[offset])
+	topicsCount := int(b[offset]) - 1
 	offset++
-	topicsCount := topicsLenByte - 1
+
 	if topicsCount < 0 {
-		return nil, errors.New("invalid topics count")
+		return nil, errors.New("describe: invalid topics count")
 	}
 
 	topics := make([]request.TopicRequest, 0, topicsCount)
 
 	for i := 0; i < topicsCount; i++ {
-		if len(payload) < offset+1 {
-			return nil, errors.New("payload too short for topic name length byte")
+		if err := need(b, offset, 1, "describe: topic name length"); err != nil {
+			return nil, err
 		}
-		nameLenByte := int(payload[offset])
+		nameLen := int(b[offset]) - 1
 		offset++
-		nameLen := nameLenByte - 1
+
 		if nameLen < 0 {
-			return nil, errors.New("invalid topic name length")
+			return nil, errors.New("describe: invalid topic name length")
+		}
+		if err := need(b, offset, nameLen, "describe: topic name"); err != nil {
+			return nil, err
 		}
 
-		if len(payload) < offset+nameLen {
-			return nil, errors.New("payload too short for topic name bytes")
-		}
-		name := string(payload[offset : offset+nameLen])
+		name := string(b[offset : offset+nameLen])
 		offset += nameLen
 
-		if len(payload) < offset+1 {
-			return nil, errors.New("payload too short for topic TAG_BUFFER")
+		if err := need(b, offset, 1, "describe: topic tag buffer"); err != nil {
+			return nil, err
 		}
 		offset++
 
 		topics = append(topics, request.TopicRequest{Name: name})
 	}
 
-	if len(payload) >= offset+4 {
+	if len(b) >= offset+4 {
 		offset += 4
 	}
 
-	var cursor int8 = -1
-	if len(payload) >= offset+1 {
-		cursor = int8(payload[offset])
+	cursor := int8(-1)
+	if len(b) >= offset+1 {
+		cursor = int8(b[offset])
 		offset++
 	}
 
@@ -134,182 +135,137 @@ func parseDescribeTopicPartitionsRequest(payload []byte) (*request.DescribeTopic
 		Cursor: cursor,
 	}, nil
 }
-func readUvarint(b []byte) (uint64, int, error) {
-	v, n := binary.Uvarint(b)
-	if n == 0 {
-		return 0, 0, errors.New("uvarint: buffer too small")
-	}
-	if n < 0 {
-		return 0, 0, errors.New("uvarint: overflow")
-	}
-	return v, n, nil
-}
 
-func parseFetchRequest(payload []byte) (*request.FetchRequest, error) {
-	r := &request.FetchRequest{}
+/* ================================ Fetch =================================== */
+
+func parseFetchRequest(b []byte) (*request.FetchRequest, error) {
 	offset := 0
+	r := &request.FetchRequest{}
 
-	if len(payload) < offset+2 {
-		return nil, errors.New("fetch: too short for client_id length")
+	if err := need(b, offset, 2, "fetch: client_id length"); err != nil {
+		return nil, err
 	}
-	clientLen := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+	clientLen := int(binary.BigEndian.Uint16(b[offset:]))
 	offset += 2
 
-	if len(payload) < offset+clientLen {
-		return nil, errors.New("fetch: too short for client_id bytes")
+	if err := need(b, offset, clientLen, "fetch: client_id bytes"); err != nil {
+		return nil, err
 	}
 	offset += clientLen
 
-	if len(payload) < offset+1 {
-		return nil, errors.New("fetch: too short for header tag buffer")
+	if err := need(b, offset, 1, "fetch: header tag buffer"); err != nil {
+		return nil, err
 	}
 	offset++
 
-	if len(payload) < offset+4 {
-		return nil, errors.New("fetch: too short for max_wait_ms")
-	}
-	offset += 4
+	offset += 4 // max_wait_ms
+	offset += 4 // min_bytes
+	offset += 4 // max_bytes
+	offset++    // isolation_level
+	offset += 4 // session_id
+	offset += 4 // session_epoch
 
-	if len(payload) < offset+4 {
-		return nil, errors.New("fetch: too short for min_bytes")
-	}
-	offset += 4
-
-	if len(payload) < offset+4 {
-		return nil, errors.New("fetch: too short for max_bytes")
-	}
-	offset += 4
-
-	if len(payload) < offset+1 {
-		return nil, errors.New("fetch: too short for isolation_level")
-	}
-	offset++
-
-	if len(payload) < offset+4 {
-		return nil, errors.New("fetch: too short for session_id")
-	}
-	offset += 4
-
-	if len(payload) < offset+4 {
-		return nil, errors.New("fetch: too short for session_epoch")
-	}
-	offset += 4
-
-	if len(payload) <= offset {
-		return nil, errors.New("fetch: too short for topics compact length")
-	}
-	topicsLen, n, err := readUvarint(payload[offset:])
+	topicsPlus1, err := readUvarintPayload(b, &offset)
 	if err != nil {
 		return nil, err
 	}
-	offset += n
 
-	topicsCount := int(topicsLen) - 1
-	if topicsCount < 0 {
-		return nil, errors.New("fetch: invalid topics count")
-	}
-	if topicsCount == 0 {
+	topicsCount := int(topicsPlus1) - 1
+	if topicsCount <= 0 {
 		return r, nil
 	}
 
-	if len(payload) < offset+16 {
-		return nil, errors.New("fetch: truncated topic_id")
+	if err := need(b, offset, 16, "fetch: topic_id"); err != nil {
+		return nil, err
 	}
+
 	var id [16]byte
-	copy(id[:], payload[offset:offset+16])
+	copy(id[:], b[offset:offset+16])
 	offset += 16
 
-	r.Topics = append(r.Topics, request.FetchTopic{
-		TopicID: id,
-	})
-
+	r.Topics = append(r.Topics, request.FetchTopic{TopicID: id})
 	return r, nil
 }
 
-func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
+/* ================================ Produce ================================= */
+
+func parseProduceRequest(b []byte) (*request.ProduceRequest, error) {
 	offset := 0
 	r := &request.ProduceRequest{}
 
-	if len(payload) < offset+2 {
-		return nil, errors.New("produce: too short for client_id length")
+	if err := need(b, offset, 2, "produce: client_id length"); err != nil {
+		return nil, err
 	}
-	clientLen := int(int16(binary.BigEndian.Uint16(payload[offset : offset+2])))
+	clientLen := int(int16(binary.BigEndian.Uint16(b[offset:])))
 	offset += 2
 
 	if clientLen >= 0 {
-		if len(payload) < offset+clientLen {
-			return nil, errors.New("produce: too short for client_id bytes")
+		if err := need(b, offset, clientLen, "produce: client_id bytes"); err != nil {
+			return nil, err
 		}
 		offset += clientLen
 	}
 
-	if _, err := skipTagBuffer(payload, &offset); err != nil {
+	if _, err := skipTagBuffer(b, &offset); err != nil {
 		return nil, err
 	}
 
-	if _, err := readCompactNullableString(payload, &offset); err != nil {
+	if _, err := readCompactNullableString(b, &offset); err != nil {
 		return nil, err
 	}
 
-	if len(payload) < offset+2 {
-		return nil, errors.New("produce: missing acks")
-	}
-	offset += 2
+	offset += 2 // acks
+	offset += 4 // timeout_ms
 
-	if len(payload) < offset+4 {
-		return nil, errors.New("produce: missing timeout_ms")
-	}
-	offset += 4
-
-	topicsCountPlus1, err := readUvarintPayload(payload, &offset)
+	topicsPlus1, err := readUvarintPayload(b, &offset)
 	if err != nil {
 		return nil, err
 	}
-	topicsCount := int(topicsCountPlus1) - 1
+	topicsCount := int(topicsPlus1) - 1
 	if topicsCount < 0 {
 		return nil, errors.New("produce: invalid topics count")
 	}
 
 	for i := 0; i < topicsCount; i++ {
-		name, err := readCompactString(payload, &offset)
+		name, err := readCompactString(b, &offset)
 		if err != nil {
 			return nil, err
 		}
 
 		topic := request.ProduceTopic{Name: name}
 
-		partsCountPlus1, err := readUvarintPayload(payload, &offset)
+		partsPlus1, err := readUvarintPayload(b, &offset)
 		if err != nil {
 			return nil, err
 		}
-		partsCount := int(partsCountPlus1) - 1
+		partsCount := int(partsPlus1) - 1
 		if partsCount < 0 {
 			return nil, errors.New("produce: invalid partitions count")
 		}
 
 		for j := 0; j < partsCount; j++ {
-			if len(payload) < offset+4 {
-				return nil, errors.New("produce: truncated partition index")
+			if err := need(b, offset, 4, "produce: partition index"); err != nil {
+				return nil, err
 			}
-			pIdx := int32(binary.BigEndian.Uint32(payload[offset : offset+4]))
+			idx := int32(binary.BigEndian.Uint32(b[offset:]))
 			offset += 4
 
-			records, err := readCompactBytes(payload, &offset)
+			records, err := readCompactBytes(b, &offset)
 			if err != nil {
 				return nil, err
 			}
 
-			if _, err := skipTagBuffer(payload, &offset); err != nil {
+			if _, err := skipTagBuffer(b, &offset); err != nil {
 				return nil, err
 			}
 
 			topic.Partitions = append(topic.Partitions, request.ProducePartition{
-				Index:   pIdx,
+				Index:   idx,
 				Records: records,
 			})
 		}
 
-		if _, err := skipTagBuffer(payload, &offset); err != nil {
+		if _, err := skipTagBuffer(b, &offset); err != nil {
 			return nil, err
 		}
 
@@ -319,47 +275,51 @@ func parseProduceRequest(payload []byte) (*request.ProduceRequest, error) {
 	return r, nil
 }
 
-func readCompactBytes(b []byte, offset *int) ([]byte, error) {
-	lnPlus1, err := readUvarintPayload(b, offset)
-	if err != nil {
-		return nil, err
+/* ================================ Helpers ================================= */
+
+func need(b []byte, offset, size int, ctx string) error {
+	if len(b) < offset+size {
+		return errors.New(ctx + ": truncated")
 	}
-	if lnPlus1 == 0 {
-		return nil, nil
-	}
-	ln := int(lnPlus1) - 1
-	if ln < 0 {
-		return nil, nil
-	}
-	if *offset+ln > len(b) {
-		return nil, errors.New("compact bytes truncated")
-	}
-	out := b[*offset : *offset+ln]
-	*offset += ln
-	return out, nil
+	return nil
 }
 
 func readUvarintPayload(b []byte, offset *int) (uint64, error) {
 	v, n := binary.Uvarint(b[*offset:])
 	if n <= 0 {
-		return 0, errors.New("uvarint decode error")
+		return 0, errors.New("uvarint: decode error")
 	}
 	*offset += n
 	return v, nil
 }
 
+func readCompactBytes(b []byte, offset *int) ([]byte, error) {
+	lnPlus1, err := readUvarintPayload(b, offset)
+	if err != nil || lnPlus1 == 0 {
+		return nil, err
+	}
+
+	ln := int(lnPlus1) - 1
+	if err := need(b, *offset, ln, "compact bytes"); err != nil {
+		return nil, err
+	}
+
+	out := b[*offset : *offset+ln]
+	*offset += ln
+	return out, nil
+}
+
 func readCompactString(b []byte, offset *int) (string, error) {
 	lnPlus1, err := readUvarintPayload(b, offset)
-	if err != nil {
+	if err != nil || lnPlus1 == 0 {
 		return "", err
 	}
+
 	ln := int(lnPlus1) - 1
-	if ln < 0 {
-		return "", nil
+	if err := need(b, *offset, ln, "compact string"); err != nil {
+		return "", err
 	}
-	if len(b) < *offset+ln {
-		return "", errors.New("compact string truncated")
-	}
+
 	s := string(b[*offset : *offset+ln])
 	*offset += ln
 	return s, nil
@@ -367,50 +327,27 @@ func readCompactString(b []byte, offset *int) (string, error) {
 
 func readCompactNullableString(b []byte, offset *int) (*string, error) {
 	lnPlus1, err := readUvarintPayload(b, offset)
-	if err != nil {
+	if err != nil || lnPlus1 == 0 {
 		return nil, err
 	}
-	if lnPlus1 == 0 {
-		return nil, nil
-	}
+
 	ln := int(lnPlus1) - 1
-	if ln < 0 {
-		return nil, nil
+	if err := need(b, *offset, ln, "compact nullable string"); err != nil {
+		return nil, err
 	}
-	if len(b) < *offset+ln {
-		return nil, errors.New("compact nullable string truncated")
-	}
+
 	s := string(b[*offset : *offset+ln])
 	*offset += ln
 	return &s, nil
 }
 
-func skipCompactBytes(b []byte, offset *int) error {
-	lnPlus1, err := readUvarintPayload(b, offset)
-	if err != nil {
-		return err
-	}
-	if lnPlus1 == 0 {
-		return nil
-	}
-	ln := int(lnPlus1) - 1
-	if ln < 0 {
-		return nil
-	}
-	*offset += ln
-	if *offset > len(b) {
-		return errors.New("compact bytes truncated")
-	}
-	return nil
-}
-
 func skipTagBuffer(b []byte, offset *int) (uint64, error) {
-	numTags, err := readUvarintPayload(b, offset)
+	count, err := readUvarintPayload(b, offset)
 	if err != nil {
-		return 0, errors.New("tag buffer truncated")
+		return 0, errors.New("tag buffer: truncated")
 	}
 
-	for i := uint64(0); i < numTags; i++ {
+	for i := uint64(0); i < count; i++ {
 		if _, err := readUvarintPayload(b, offset); err != nil {
 			return 0, errors.New("tag id truncated")
 		}
@@ -418,11 +355,11 @@ func skipTagBuffer(b []byte, offset *int) (uint64, error) {
 		if err != nil {
 			return 0, errors.New("tag size truncated")
 		}
-		if len(b) < *offset+int(size) {
-			return 0, errors.New("tag value truncated")
+		if err := need(b, *offset, int(size), "tag value"); err != nil {
+			return 0, err
 		}
 		*offset += int(size)
 	}
 
-	return numTags, nil
+	return count, nil
 }
