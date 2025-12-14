@@ -1,34 +1,43 @@
-[![progress-banner](https://backend.codecrafters.io/progress/kafka/bb61c003-0f53-4a2f-9c59-ebbed66bf8b1)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# Kafka Broker (Educational)
 
-This is a starting point for Go solutions to the
-["Build Your Own Kafka" Challenge](https://codecrafters.io/challenges/kafka).
+An educational implementation of a Kafka-compatible broker built from scratch.  
+The project focuses on understanding Kafka internals by implementing the wire protocol, metadata handling, and basic producer/consumer workflows.
 
-In this challenge, you'll build a toy Kafka clone that's capable of accepting
-and responding to ApiVersions & Fetch API requests. You'll also learn about
-encoding and decoding messages using the Kafka wire protocol. You'll also learn
-about handling the network protocol, event loops, TCP sockets and more.
+This is **not** a production-ready Kafka broker.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+---
 
-# Passing the first stage
+## Implemented Features
 
-The entry point for your Kafka implementation is in `app/main.go`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+- TCP server with concurrent client support
+- Kafka wire protocol parsing and response building
+- ApiVersions handling
+- DescribeTopicPartitions support
+- Fetch (consume messages from disk)
+- Produce (append messages to disk)
+- Metadata loading from log-based storage
+- Correct Correlation ID handling
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
-```
+---
 
-That's all!
+## Supported Scenarios
 
-# Stage 2 & beyond
+### ApiVersions
+- Parse and validate API versions
 
-Note: This section is for stages 2 and beyond.
+### DescribeTopicPartitions
+- Unknown topic
+- Single and multiple partitions
+- Multiple topics
 
-1. Ensure you have `go (1.24)` installed locally
-1. Run `./your_program.sh` to run your Kafka broker, which is implemented in
-   `app/main.go`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+### Fetch
+- No topics
+- Unknown topic
+- Empty topic
+- Single and multiple messages
+
+### Produce
+- Invalid topic or partition
+- Single and multiple records
+- Multiple partitions and topics
+
