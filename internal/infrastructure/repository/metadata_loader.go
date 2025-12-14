@@ -42,19 +42,22 @@ func buildDomainTopics(batches []parser.RecordBatch) *LoadedMetadata {
 		for _, rec := range batch.Records {
 			switch v := rec.Value.(type) {
 			case parser.RecordTopic:
-				tm := &domain.TopicMetadata{
-					Name:       v.TopicName,
-					TopicID:    v.TopicUUID,
-					Partitions: []domain.PartitionMetadata{},
+				tm, ok := byUUID[v.TopicUUID]
+				if !ok {
+					tm = &domain.TopicMetadata{
+						TopicID:    v.TopicUUID,
+						Partitions: []domain.PartitionMetadata{},
+					}
+					byUUID[v.TopicUUID] = tm
 				}
-				byUUID[v.TopicUUID] = tm
+
+				tm.Name = v.TopicName
 				result[v.TopicName] = tm
 
 			case parser.RecordPartition:
 				tm, ok := byUUID[v.TopicUUID]
 				if !ok {
 					tm = &domain.TopicMetadata{
-						Name:       "",
 						TopicID:    v.TopicUUID,
 						Partitions: []domain.PartitionMetadata{},
 					}
